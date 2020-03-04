@@ -11,4 +11,47 @@
 // "white" in every pixel;
 // the screen should remain fully clear as long as no key is pressed.
 
-// Put your code here.
+// SCREEN = 16384 (0x4000)
+// KBD = 24576 (0x6000)
+
+@color
+M=0
+
+(LOOP)
+  @SCREEN
+  D=A
+  @px // keeps track of which pixel is being colored
+  M=D
+
+  @KBD
+  D=M // is keyboard being pressed?
+  @BLACK
+  D;JGT // jump to black if pressed
+
+  @color
+  M=0 // set color to white if it makes it here (i.e. doesn't jump)
+  @DRAW_SCREEN
+  0;JMP // skip coloring the pixel black if it makes it here
+
+  (BLACK)
+    @color
+    M=-1 // 2's complement (1111 1111 1111 1111)
+    
+  (DRAW_SCREEN)
+    @color
+    D=M
+    @px
+    A=M // I don't understand this line at all
+    M=D
+
+    @px
+    M=M+1
+    D=M
+
+    @KBD
+    D=D-A
+    @DRAW_SCREEN
+    D;JLT
+
+@LOOP
+0;JMP
