@@ -39,5 +39,54 @@ CHIP CPU {
         pc[15];          // address of next instruction
 
     PARTS:
-    // Put your code here:
+    And(a=instruction[15], b=true, out=isCInstruction);
+    Not(in=isCInstruction, out=isAInstruction);
+
+    // Address register stuff
+    And(a=isCInstruction, b=instruction[5], out=isWriteA);
+    Or(a=isAInstruction, b=isWriteA, out=loadA);
+    Mux16(a=instruction, b=aluOut, sel=isWriteA, out=muxOutToA);
+    ARegister(in=muxOutToA, load=loadA, out=aRegisterOut, out[0..14]=addressM);
+
+    // Destination register stuff
+    And(a=isCInstruction, b=instruction[4], out=isWriteD);
+    DRegister(in=aluOut, load=isWriteD, out=dRegisterOut);
+
+    Mux16(a=aRegisterOut, b=inM, sel=instruction[12], out=muxToAluOut);
+
+    // ALU stuff
+    ALU(
+        x=dRegisterOut,
+        y=muxToAluOut,
+        zx=instruction[11],
+        nx=instruction[10],
+        zy=instruction[9],
+        ny=instruction[8],
+        f=instruction[7],
+        no=instruction[6],
+        out=aluOut,
+        out=outM,
+        zr=aluZero,
+        ng=aluNegative
+    );
+
+    Not(in=aluNegative, out=isNotAluNegative);
+    Not(in=aluZero, out=isNotAluZero);
+    And(a=isNotAluZero, b=isNotAluNegative, out=aluPositive);
+
+    And(a=isCInstruction, b=instruction[3], out=writeM);
+
+    // Standard jumps
+    And(a=aluNegative, b=instruction[2], out=JLT);
+    And(a=aluZero, b=instruction[1], out=JEQ);
+    And(a=aluPositive, b=instruction[0], out=JGT);
+
+    // Optimized logic (infers JGE, JMP, JNE)
+    Or(a=JLT, b=JEQ, out=JLE);
+    Or(a=JLE, b=JGT, out=jumpToA);
+
+    And(a=isCInstruction, b=jumpToA, out=loadPC);
+    Not(in=loadPC, out=incPC);
+
+    PC(in=aRegisterOut, load=loadPC, inc=incPC, reset=reset, out[0..14]=pc);
 }
