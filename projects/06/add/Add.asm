@@ -5,9 +5,13 @@
 
 // Computes R0 = 2 + 3  (R0 refers to RAM[0])
 
-@2
-D=A
-@3
-D=D+A
-@0
+(LABEL)
+  @2
+              D=A // I am a comment
+  @3
+
+
+(ANOTHER_LABEL)
+  D=D+A // I am also a comment
+      @0
 M=D
