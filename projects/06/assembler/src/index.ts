@@ -1,5 +1,4 @@
 import * as fs from 'fs';
-import child_process from 'child_process';
 
 // Local imports
 import Parser from './parser';
@@ -15,7 +14,7 @@ const assemblyFile = process.argv[2];
 validateFile(assemblyFile);
 
 const inputStream = fs.createReadStream(assemblyFile);
-const outputStream = fs.createWriteStream('./dist/test.txt');
+const outputStream = fs.createWriteStream('./dist/add.hack');
 
 const parser = new Parser(inputStream, outputStream);
 
