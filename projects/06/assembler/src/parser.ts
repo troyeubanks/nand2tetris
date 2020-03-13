@@ -84,8 +84,8 @@ class Parser {
 	parse() {
 		const { outputStream, reader, generateCodeFromCommand } = this;
 
-		reader.on('line', (l) => {
-			const trimmed = l.trim();
+		reader.on('line', (line) => {
+			const trimmed = line.trim();
 			if (!trimmed || trimmed.startsWith('//')) {
 				return;
 			}
