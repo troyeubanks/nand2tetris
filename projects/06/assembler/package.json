@@ -5,10 +5,8 @@
 	"main": "lib/index.js",
 	"scripts": {
 		"build": "npm run format && rollup -c",
-		"build:types": "tsc --emitDeclarationOnly",
-		"build:js": "babel src --out-dir lib --extensions \".ts\" --source-maps inline",
-		"format": "prettier --write \"**/*.{js,ts,tsx,json,md,scss}\"",
-		"test": "node ./lib/index.js ../add/Add.asm && cat ./dist/add.hack"
+		"format": "prettier --write \"**/*.{js,ts,json,md}\"",
+		"assemble": "node ./lib/index.js"
 	},
 	"author": "",
 	"license": "ISC",
@@ -21,8 +19,12 @@
 		"@types/node": "^13.9.0",
 		"@typescript-eslint/eslint-plugin": "^2.23.0",
 		"@typescript-eslint/parser": "^2.23.0",
+		"babel-core": "^6.26.3",
+		"babel-loader": "^8.0.6",
+		"babel-polyfill": "^6.26.0",
 		"eslint-config-prettier": "^6.10.0",
 		"prettier": "^1.19.1",
+		"regenerator-runtime": "^0.13.5",
 		"rollup": "^2.0.5",
 		"rollup-plugin-babel": "^4.4.0",
 		"rollup-plugin-commonjs": "^10.1.0",

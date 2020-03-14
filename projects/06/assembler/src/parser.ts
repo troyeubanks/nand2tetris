@@ -1,7 +1,12 @@
 import { ReadStream, WriteStream } from 'fs';
 import readline from 'readline';
+
 import Code from './code';
+import SymbolTable from './symbolTable';
 import { convertDecimalToBinary } from './util';
+
+// remove this
+const DEBUG = false;
 
 enum CommandType {
 	address = 'A_COMMAND',
@@ -20,45 +25,44 @@ class Parser {
 	inputStream: ReadStream;
 	outputStream: WriteStream;
 	codeTranslator: Code;
-	hasStreamEnded: boolean = false;
+	symbolTable: SymbolTable;
+	fileContent: string[] = [];
+	currentLine: number = 0;
 
 	constructor(input: ReadStream, output: WriteStream) {
 		this.reader = readline.createInterface({ input });
 		this.inputStream = input;
 		this.outputStream = output;
 		this.codeTranslator = new Code();
+		this.symbolTable = new SymbolTable();
 	}
 
-	private hasMoreCommands = (): boolean => this.hasStreamEnded;
-
-	private getCommandType = (instruction: string): CommandType => {
-		switch (instruction[0]) {
-			case '@':
-				return CommandType.address;
-			case '(':
-				return CommandType.label;
-			default:
-				return CommandType.computation;
+	private getCommandType = (command: string): CommandType => {
+		if (command.includes('@')) {
+			return CommandType.address;
+		} else if (command.match(/[\(\)]/)) {
+			return CommandType.label;
 		}
+
+		return CommandType.computation;
 	};
 
 	// Splits the command up into relevant parts based
+	// dest and jump are optional
 	// on format: dest=comp;jump
-	private computationRegex = /(?<dest>[ADM]*)=?(?<comp>[^;\s]*);?(?<jump>[A-Z]*)/;
 	private getCommandGroup = (command: string): CommandGroup => {
-		const match = command.match(this.computationRegex);
-
-		if (!match || !match.groups) {
-			throw new Error(`Unable to parse expression: ${command}`);
+		let dest = 'absent';
+		let comp = command;
+		let jump = 'absent';
+		if (command.includes('=')) {
+			[dest, comp] = command.split('=');
 		}
 
-		const { dest, comp, jump } = match.groups;
+		if (comp.includes(';')) {
+			[comp, jump] = comp.split(';');
+		}
 
-		return {
-			dest: dest === '' ? 'null' : dest,
-			comp: comp === '' ? 'null' : comp,
-			jump: jump === '' ? 'null' : jump,
-		};
+		return { dest, comp, jump };
 	};
 
 	private generateCodeFromCommand = (command: string): string => {
@@ -66,36 +70,97 @@ class Parser {
 
 		switch (commandType) {
 			case CommandType.address:
-				// need to add symbolTable lookup
-				return '0' + convertDecimalToBinary(parseInt(command.slice(1)));
-			case CommandType.label:
-				// return address of line after label
-				return '';
+				const cleaned = command.slice(1);
+				const int = parseInt(cleaned);
+				const address = int >= 0 ? int : this.symbolTable.getAddress(cleaned);
+
+				return '0' + convertDecimalToBinary(address);
 			case CommandType.computation:
 				const { dest, comp, jump } = this.codeTranslator;
 				const group = this.getCommandGroup(command);
 
+				if (!comp[group.comp]) {
+					throw new Error(`Invalid command: ${command}`);
+				}
+
 				return `111${comp[group.comp]}${dest[group.dest]}${jump[group.jump]}`;
 			default:
-				throw new Error(`Invalid command: ${command}`);
+				throw new Error(`Unable to generate code from ${command}`);
 		}
 	};
 
-	parse() {
-		const { outputStream, reader, generateCodeFromCommand } = this;
+	private parse = async () => {
+		return new Promise((resolve, reject) => {
+			this.reader
+				.on('line', (line) => {
+					const trimmed = line.trim();
 
-		reader.on('line', (line) => {
-			const trimmed = line.trim();
-			if (!trimmed || trimmed.startsWith('//')) {
-				return;
+					// ignore comments and whitespace
+					if (!trimmed || trimmed.startsWith('//')) {
+						return;
+					}
+
+					// could have side-comment and inner whitespace
+					const command = trimmed.split('//')[0].replace(/\s/g, '');
+
+					const type = this.getCommandType(command);
+					if (type === CommandType.label) {
+						// assign label to line after
+						const labelName = command.replace(/[\(\)]/g, '');
+						this.symbolTable.addLabel(labelName, this.fileContent.length);
+					} else {
+						// potentially inefficient, might starve with huge files
+						// could write to a file instead if it becomes a problem
+						this.fileContent.push(command);
+					}
+				})
+				.on('close', () => {
+					resolve();
+				})
+				.on('error', () => {
+					reject('Error parsing file');
+				});
+		});
+	};
+
+	public write = async () => {
+		const {
+			parse,
+			fileContent,
+			generateCodeFromCommand,
+			outputStream,
+			getCommandType,
+		} = this;
+
+		await parse();
+
+		let currentLine = 0;
+		let hasMoreCommands = true;
+		while (hasMoreCommands) {
+			const command = fileContent[currentLine];
+			const type = getCommandType(command);
+			const addr = command.slice(1);
+
+			if (
+				type === CommandType.address &&
+				!(parseInt(addr) >= 0) &&
+				!this.symbolTable.contains(addr)
+			) {
+				this.symbolTable.addVariable(addr);
 			}
 
-			const instruction = trimmed.split('//')[0].replace(' ', '');
-			const convertedInstruction = generateCodeFromCommand(instruction);
+			const convertedCommand = generateCodeFromCommand(command);
 
-			outputStream.write(convertedInstruction + '\n');
-		});
-	}
+			outputStream.write(
+				(DEBUG ? command + ' -- ' : '') + convertedCommand + '\n'
+			);
+
+			currentLine++;
+			if (currentLine >= fileContent.length) {
+				hasMoreCommands = false;
+			}
+		}
+	};
 }
 
 export default Parser;
